@@ -1,13 +1,12 @@
 package ru.albemuth.util;
 
-import junit.framework.TestCase;
-import org.apache.log4j.Logger;
+import org.junit.Test;
 
-import java.io.*;
-import java.util.*;
+import static org.junit.Assert.fail;
 
-public class TestSimple extends TestCase /*implements Serializable*/ {
+public class TestSimple {
 
+    @Test
     public void test() {
         try {
             for (int i = 0; i < 100; i++) {
