@@ -5,6 +5,7 @@ import org.junit.Test;
 import java.util.*;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.fail;
 
 public class TestAggregation {
@@ -38,36 +39,44 @@ public class TestAggregation {
                 }
             };
 
-            Aggregation.Sum<Integer, MyStruct> aggregate = new Aggregation.Sum<Integer, MyStruct>(valueConvertor);
-
-            Map<Integer, Aggregation.Sum<Integer, MyStruct>> groups = Aggregation.select(aggregate).from(list).orderBy(idConvertor);
+            Map<Integer, List<MyStruct>> groups = Aggregation.group(list).by(idConvertor);
             assertEquals(4, groups.values().size());
-            assertEquals(6, groups.get(2).sum);
-            assertEquals(3, groups.get(3).sum);
-            assertEquals(100, groups.get(4).sum);
 
-            final Aggregation.Sum<Integer, MyStruct> minAggregate = Collections.min(groups.values(), new Comparator<Aggregation.Sum<Integer, MyStruct>>() {
+            assertEquals(10, Aggregation.sum(groups.get(1)).by(valueConvertor));
+            assertEquals(6, Aggregation.sum(groups.get(2)).by(valueConvertor));
+            assertEquals(3, Aggregation.sum(groups.get(3)).by(valueConvertor));
+            assertEquals(100, Aggregation.sum(groups.get(4)).by(valueConvertor));
+
+            List<T2<Integer, Integer>> sums = new ArrayList<T2<Integer, Integer>>(groups.size());
+            for (Integer id: groups.keySet()) {
+                sums.add(new T2<Integer, Integer>(id, Aggregation.sum(groups.get(id)).by(valueConvertor)));
+            }
+            final T2<Integer, Integer> minSum = Collections.min(sums, new Comparator<T2<Integer, Integer>>() {
                 @Override
-                public int compare(Aggregation.Sum<Integer, MyStruct> o1, Aggregation.Sum<Integer, MyStruct> o2) {
-                    return o1.sum - o2.sum;
+                public int compare(T2<Integer, Integer> o1, T2<Integer, Integer> o2) {
+                    return o1.getV2() - o2.getV2();
                 }
             });
-            assertEquals(3, minAggregate.getSum());
+            assertEquals(3, minSum.getV2().intValue());
 
-            MyStruct minMyStruct = Collections.min(
-                    new FilteredCollection<MyStruct>(list) {
-                        @Override
-                        public boolean accept(MyStruct myStruct) {
-                            return myStruct.id == minAggregate.getId();
-                        }
-                    },
-                    new Comparator<MyStruct>() {
-                        @Override
-                        public int compare(MyStruct o1, MyStruct o2) {
-                            return o1.value - o2.value;
-                        }
-                    }
-            );
+            Statistics stats = Aggregation.statistics(sums).by(new Convertor.DoubleConvertor<T2<Integer, Integer>>() {
+                @Override
+                public double doubleValue(T2<Integer, Integer> sum) {
+                    return sum.v2;
+                }
+            });
+            assertEquals(3, stats.getMin(), 0);
+            assertEquals(100, stats.getMax(), 0);
+
+            Iterator<MyStruct> it = new FilteredCollection<MyStruct>(list) {
+                @Override
+                public boolean accept(MyStruct myStruct) {
+                    return myStruct.id == minSum.getV1();
+                }
+            }.iterator();
+            MyStruct minMyStruct = it.hasNext() ? it.next() : null;
+            assertNotNull(minMyStruct);
+
             assertEquals(3, minMyStruct.id);
             assertEquals(1, minMyStruct.value);
 
@@ -87,15 +96,3 @@ public class TestAggregation {
         }
     }
 }
-
-/*class C1<K, V> {
-
-}
-
-class C2<K, V> {
-
-}
-
-class C3<C2<K, V>> extends C1<K, V> {
-
-        }*/

@@ -2,32 +2,21 @@ package ru.albemuth.util;
 
 import java.util.*;
 
-public class Aggregation<Id, Value, Ag extends Aggregation.Aggregate<Id, Value>> {
+public class Aggregation<Value> {
 
-    private Ag aggregate;
-    private Iterator<Value> it;
+    protected Iterator<Value> iterator;
 
-    public Aggregation(Ag aggregate) {
-        this.aggregate = aggregate;
+    public Aggregation(Iterator<Value> iterator) {
+        this.iterator = iterator;
     }
 
-    protected void setIt(Iterator<Value> it) {
-        this.it = it;
-    }
-
-    public Aggregation(Ag aggregate, Iterator<Value> it) {
-        this.aggregate = aggregate;
-        this.it = it;
-    }
-
-    public Map<Id, Ag> by(Map<Id, Ag> groups, Convertor<Value, Id> convertor) {
-        for (; it.hasNext(); ) {
-            Value value = it.next();
+    public <Id> Map<Id, Group<Id, Value>> by(Map<Id, Group<Id, Value>> groups, Convertor<Value, Id> convertor) {
+        for (; iterator.hasNext(); ) {
+            Value value = iterator.next();
             Id id = convertor.map(value);
-            Ag group = groups.get(id);
+            Group<Id, Value> group = groups.get(id);
             if (group == null) {
-                group = (Ag)aggregate.clone();
-                group.setId(id);
+                group = new Group<Id, Value>(id);
                 groups.put(id, group);
             }
             group.process(value);
@@ -35,200 +24,168 @@ public class Aggregation<Id, Value, Ag extends Aggregation.Aggregate<Id, Value>>
         return groups;
     }
 
-    public Map<Id, Ag> orderBy(Convertor<Value, Id> convertor) {
-        return by(new HashMap<Id, Ag>(), convertor);
+    public <Id> Map<Id, List<Value>> by(Convertor<Value, Id> convertor) {
+        return groups(by(new HashMap<Id, Group<Id, Value>>(), convertor));
     }
 
-    public Aggregation<Id, Value, Ag> from(Collection<Value> values) {
-        setIt(values.iterator());
-        return this;
+    public static <Id, Value> Map<Id, List<Value>> groups(Map<Id, Group<Id, Value>> groups) {
+        Map<Id, List<Value>> valuesGroups = new HashMap<Id, List<Value>>(groups.size());
+        for (Group<Id, Value> group: groups.values()) {
+            valuesGroups.put(group.getId(), group.getValues());
+        }
+        return valuesGroups;
     }
 
-    public Aggregation<Id, Value, Ag> from(Iterator<Value> valuesIterator) {
-        setIt(valuesIterator);
-        return this;
+    public static <Value> Aggregation<Value> group(Iterator<Value> iterator) {
+        return new Aggregation<Value>(iterator);
     }
 
-    public Aggregation<Id, Value, Ag> from(Value... values) {
-        setIt(Arrays.asList(values).iterator());
-        return this;
+    public static <Value> Aggregation<Value> group(Collection<Value> values) {
+        return new Aggregation<Value>(values.iterator());
     }
 
-    public static <Id, Value, Ag extends Aggregate<Id, Value>> Aggregation<Id, Value, Ag> select(Ag aggregate) {
-        return new Aggregation<Id, Value, Ag>(aggregate);
+    public static <Value> Aggregation<Value> group(Value... values) {
+        return new Aggregation<Value>(Arrays.asList(values).iterator());
     }
 
-    public static abstract class Aggregate<Id, Value> implements Cloneable {
+    public static <Value> int count(Iterator<Value> iterator) {
+        int counter = 0;
+        for (; iterator.hasNext(); ) {counter++;}
+        return counter;
+    }
 
-        protected Id id;
+    public static <Value> int count(Collection<Value> values) {
+        return values.size();
+    }
 
-        public Id getId() {
-            return id;
+    public static <Value> int count(Value... values) {
+        return values.length;
+    }
+
+    public static <Value> SumIntAggregation<Value> sum(Iterator<Value> iterator) {
+        return new SumIntAggregation<Value>(iterator);
+    }
+
+    public static <Value> SumIntAggregation<Value> sum(Collection<Value> values) {
+        return new SumIntAggregation<Value>(values.iterator());
+    }
+
+    public static <Value> SumIntAggregation<Value> sum(Value... values) {
+        return new SumIntAggregation<Value>(Arrays.asList(values).iterator());
+    }
+
+    public static <Value> SumLongAggregation<Value> sumLong(Iterator<Value> iterator) {
+        return new SumLongAggregation<Value>(iterator);
+    }
+
+    public static <Value> SumLongAggregation<Value> sumLong(Collection<Value> values) {
+        return new SumLongAggregation<Value>(values.iterator());
+    }
+
+    public static <Value> SumLongAggregation<Value> sumLong(Value... values) {
+        return new SumLongAggregation<Value>(Arrays.asList(values).iterator());
+    }
+
+    public static <Value> SumDoubleAggregation<Value> sumDouble(Iterator<Value> iterator) {
+        return new SumDoubleAggregation<Value>(iterator);
+    }
+
+    public static <Value> SumDoubleAggregation<Value> sumDouble(Convertor.DoubleConvertor<Value> convertor, Collection<Value> values) {
+        return new SumDoubleAggregation<Value>(values.iterator());
+    }
+
+    public static <Value> SumDoubleAggregation<Value> sumDouble(Convertor.DoubleConvertor<Value> convertor, Value... values) {
+        return new SumDoubleAggregation<Value>(Arrays.asList(values).iterator());
+    }
+
+    public static <Value> StatisticsAggregation<Value> statistics(Iterator<Value> iterator) {
+        return new StatisticsAggregation<Value>(iterator);
+    }
+
+    public static <Value> StatisticsAggregation<Value> statistics(Collection<Value> values) {
+        return statistics(values.iterator());
+    }
+
+    public static <Value> StatisticsAggregation<Value> statistics(Value... values) {
+        return statistics(Arrays.asList(values));
+    }
+
+    public static class SumIntAggregation<Value> extends Aggregation<Value> {
+
+        public SumIntAggregation(Iterator<Value> iterator) {
+            super(iterator);
         }
 
-        public void setId(Id id) {
-            this.id = id;
-        }
-
-        public abstract void process(Value value);
-
-        @Override
-        public Aggregate<Id, Value> clone() {
-            try {
-                return  (Aggregate<Id, Value>)super.clone();
-            } catch (CloneNotSupportedException e) {
-                throw new RuntimeException("Can't clone aggregate " + getClass().getName(), e);
+        public int by(Convertor.IntConvertor<Value> convertor) {
+            int ret = 0;
+            for (; iterator.hasNext(); ) {
+                ret += convertor.intValue(iterator.next());
             }
+            return ret;
         }
     }
 
-    public static class Count<Id, Value> extends Aggregate<Id, Value> {
+    public static class SumLongAggregation<Value> extends Aggregation<Value> {
 
-        protected int count;
-
-        public int getCount() {
-            return count;
+        public SumLongAggregation(Iterator<Value> iterator) {
+            super(iterator);
         }
 
-        @Override
-        public void process(Value value) {
-            count++;
+        public long by(Convertor.LongConvertor<Value> convertor) {
+            long ret = 0;
+            for (; iterator.hasNext(); ) {
+                ret += convertor.longValue(iterator.next());
+            }
+            return ret;
         }
-
     }
 
-    public abstract static class Statistics<Id, Value> extends Aggregate<Id, Value> {
+    public static class SumDoubleAggregation<Value> extends Aggregation<Value> {
 
-        protected ru.albemuth.util.Statistics stats;
+        public SumDoubleAggregation(Iterator<Value> iterator) {
+            super(iterator);
+        }
 
-        public ru.albemuth.util.Statistics getStats() {
+        public double by(Convertor.DoubleConvertor<Value> convertor) {
+            double ret = 0;
+            for (; iterator.hasNext(); ) {
+                ret += convertor.doubleValue(iterator.next());
+            }
+            return ret;
+        }
+    }
+
+    public static class StatisticsAggregation<Value> extends Aggregation<Value> {
+
+        public StatisticsAggregation(Iterator<Value> iterator) {
+            super(iterator);
+        }
+
+        public Statistics by(Convertor.DoubleConvertor<Value> convertor) {
+            Statistics stats = new Statistics(getClass().getName());
+            for (; iterator.hasNext(); ) {
+                stats.addValue(convertor.doubleValue(iterator.next()));
+            }
             return stats;
         }
-
-        @Override
-        public void process(Value value) {
-            stats.addValue(doubleValue(value));
-        }
-
-        public abstract double doubleValue(Value value);
     }
 
-    public static class SumByte<Id, Value> extends Aggregate<Id, Value> {
+    public static class Group<Id, Value> extends T2<Id, List<Value>>{
 
-        protected Convertor.ByteConvertor<Value> convertor;
-        protected byte sum;
-
-        public SumByte(Convertor.ByteConvertor<Value> convertor) {
-            this.convertor = convertor;
+        public Group(Id id) {
+            super(id, new ArrayList<Value>());
         }
 
-        public byte getSum() {
-            return sum;
+        public Id getId() {
+            return v1;
         }
 
-        @Override
+        public List<Value> getValues() {
+            return v2;
+        }
+
         public void process(Value value) {
-            sum += convertor.byteValue(value);
-        }
-
-    }
-
-    public static class SumShort<Id, Value> extends Aggregate<Id, Value> {
-
-        protected Convertor.ShortConvertor<Value> convertor;
-        protected short sum;
-
-        public SumShort(Convertor.ShortConvertor<Value> convertor) {
-            this.convertor = convertor;
-        }
-
-        public short getSum() {
-            return sum;
-        }
-
-        @Override
-        public void process(Value value) {
-            sum += convertor.shortValue(value);
-        }
-
-    }
-
-    public static class Sum<Id, Value> extends Aggregate<Id, Value> {
-
-        protected Convertor.IntConvertor<Value> convertor;
-        protected int sum;
-
-        public Sum(Convertor.IntConvertor<Value> convertor) {
-            this.convertor = convertor;
-        }
-
-        public int getSum() {
-            return sum;
-        }
-
-        @Override
-        public void process(Value value) {
-            sum += convertor.intValue(value);
-        }
-
-    }
-
-    public static class SumLong<Id, Value> extends Aggregate<Id, Value> {
-
-        protected Convertor.LongConvertor<Value> convertor;
-        protected long sum;
-
-        public SumLong(Convertor.LongConvertor<Value> convertor) {
-            this.convertor = convertor;
-        }
-
-        public long getSum() {
-            return sum;
-        }
-
-        @Override
-        public void process(Value value) {
-            sum += convertor.longValue(value);
-        }
-
-    }
-
-    public static class SumFloat<Id, Value> extends Aggregate<Id, Value> {
-
-        protected Convertor.FloatConvertor<Value> convertor;
-        protected float sum;
-
-        public SumFloat(Convertor.FloatConvertor<Value> convertor) {
-            this.convertor = convertor;
-        }
-
-        public float getSum() {
-            return sum;
-        }
-
-        @Override
-        public void process(Value value) {
-            sum += convertor.floatValue(value);
-        }
-
-    }
-
-    public static class SumDouble<Id, Value> extends Aggregate<Id, Value> {
-
-        protected Convertor.DoubleConvertor<Value> convertor;
-        protected double sum;
-
-        public SumDouble(Convertor.DoubleConvertor<Value> convertor) {
-            this.convertor = convertor;
-        }
-
-        public double getSum() {
-            return sum;
-        }
-
-        @Override
-        public void process(Value value) {
-            sum += convertor.doubleValue(value);
+            getValues().add(value);
         }
 
     }
